@@ -1,86 +1,144 @@
+import WeatherCard from '../components/weather/WeatherCard';
+import axios from 'axios'
 import type { NextPage } from 'next'
 import Head from 'next/head'
-import Image from 'next/image'
+import { MouseEvent, useEffect, useRef, useState } from 'react'
+import Searchbar from '../components/search/Searchbar'
 
 const Home: NextPage = () => {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center py-2">
-      <Head>
-        <title>Create Next App</title>
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
 
-      <main className="flex w-full flex-1 flex-col items-center justify-center px-20 text-center">
-        <h1 className="text-6xl font-bold">
-          Welcome to{' '}
-          <a className="text-blue-600" href="https://nextjs.org">
-            Next.js!
-          </a>
-        </h1>
 
-        <p className="mt-3 text-2xl">
-          Get started by editing{' '}
-          <code className="rounded-md bg-gray-100 p-3 font-mono text-lg">
-            pages/index.tsx
-          </code>
-        </p>
+    // get geo location
+    const [lat, setLat] = useState(0)
+    const [lng, setLng] = useState(0)
+    const [address, setAddress] = useState<string>('');
+    const [addressAutocomplete, setAddressAutocomplete] = useState([]);
+    const [weather, setWeather] = useState<object[]>([])
+    const [errors, setErrors] = useState({});
 
-        <div className="mt-6 flex max-w-4xl flex-wrap items-center justify-around sm:w-full">
-          <a
-            href="https://nextjs.org/docs"
-            className="mt-6 w-96 rounded-xl border p-6 text-left hover:text-blue-600 focus:text-blue-600"
-          >
-            <h3 className="text-2xl font-bold">Documentation &rarr;</h3>
-            <p className="mt-4 text-xl">
-              Find in-depth information about Next.js features and API.
-            </p>
-          </a>
+    const searchbarRef = useRef<HTMLDivElement>(null);
 
-          <a
-            href="https://nextjs.org/learn"
-            className="mt-6 w-96 rounded-xl border p-6 text-left hover:text-blue-600 focus:text-blue-600"
-          >
-            <h3 className="text-2xl font-bold">Learn &rarr;</h3>
-            <p className="mt-4 text-xl">
-              Learn about Next.js in an interactive course with quizzes!
-            </p>
-          </a>
+    const getLocation = () => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setLat(position.coords.latitude)
+                    setLng(position.coords.longitude)
+                },
+                (error) => {
+                    setErrors(error.message)
+                }
+            )
+        } else {
+            setErrors({
+                ...errors,
+                geolocation: 'Geolocation is not supported by this browser or access is denied.'
+            })
+        }
+    }
 
-          <a
-            href="https://github.com/vercel/next.js/tree/canary/examples"
-            className="mt-6 w-96 rounded-xl border p-6 text-left hover:text-blue-600 focus:text-blue-600"
-          >
-            <h3 className="text-2xl font-bold">Examples &rarr;</h3>
-            <p className="mt-4 text-xl">
-              Discover and deploy boilerplate example Next.js projects.
-            </p>
-          </a>
+    const getWeather = () => {
+        if (lat && lng) {
+            axios.get("api/weather", {
+                params: {
+                    lat: lat,
+                    lng: lng
+                }
+            })
+                .then(res => {
+                    setWeather(res.data.daily.splice(0, 5));
+                })
+                .catch(err => {
+                    setErrors({
+                        ...errors,
+                        weather: err.message
+                    })
+                })
+        }
+    }
 
-          <a
-            href="https://vercel.com/import?filter=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className="mt-6 w-96 rounded-xl border p-6 text-left hover:text-blue-600 focus:text-blue-600"
-          >
-            <h3 className="text-2xl font-bold">Deploy &rarr;</h3>
-            <p className="mt-4 text-xl">
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
+    useEffect(() => {
+        // autocomplete address with debounce
+        const searchAddress = setTimeout(async () => {
+            if (address) {
+                const res = await axios.get("api/geocode", {
+                    params: {
+                        text: address
+                    }
+                });
+                console.log(res.data.data);
+
+                setAddressAutocomplete(res.data.data)
+            }
+        }, 500);
+        return () => clearTimeout(searchAddress);
+    }, [address])
+
+    useEffect(() => {
+        if (lat && lng) {
+            getWeather();
+        }
+    }, [lat, lng])
+
+    useEffect(() => {
+        const searchbar = searchbarRef.current;
+        console.log(searchbar);
+    }, [])
+
+
+    const getWeatherByAddress = async (e: MouseEvent, lat: number, lng: number) => {
+        e.preventDefault();
+        searchbarRef.current?.blur();
+        setLat(lat);
+        setLng(lng);
+    }
+
+    return (
+        <div className="min-h-screen bg-gradient-to-tr from-blue-200 to-sky-600">
+            <Head>
+                <title>Create Next App</title>
+                <link rel="icon" href="/favicon.ico" />
+            </Head>
+
+            <main className="hero ">
+                <div className="hero-content text-center flex-col">
+                    <div className='max-w-md'>
+                        <h1 className="text-6xl font-bold">
+                            Weather App
+                        </h1>
+                    </div>
+                    <div>
+                        <Searchbar tabIndex={0} text={address} onLocation={getLocation} onChange={(e: any) => setAddress(e.target.value)} />
+                        {addressAutocomplete.length > 0 &&
+                            <ul tabIndex={0} className="p-2 shadow bg-base-100 rounded-box w-full mt-1 z-50">
+                                {addressAutocomplete?.map((item: any, index) =>
+                                    <li key={index} className="hover:bg-base-300 rounded-lg px-0.5 py-2">
+                                        <a href='' onClick={(e) => getWeatherByAddress(e, item.latitude, item.longitude)}>
+                                            {`${item.name} 
+                                        ${item.administrative_area != null && item.administrative_area != item.name ? item.administrative_area : ''} 
+                                        ${item.region != null && item.region != item.name ? item.region : ''}
+                                        - ${item.country}`}
+                                        </a>
+                                    </li>
+                                )}
+                            </ul>
+                        }
+                    </div>
+                </div>
+            </main>
+
+            <div className='my-4'>
+                {weather?.length > 0 &&
+                    <div className="flex flex-col md:flex-row items-center justify-center">
+                        {weather?.map((item: any, index) =>
+                            <WeatherCard weather={item} key={index} />
+                        )}
+                    </div>
+                }
+            </div>
+
         </div>
-      </main>
-
-      <footer className="flex h-24 w-full items-center justify-center border-t">
-        <a
-          className="flex items-center justify-center gap-2"
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <Image src="/vercel.svg" alt="Vercel Logo" width={72} height={16} />
-        </a>
-      </footer>
-    </div>
-  )
+    )
 }
 
 export default Home
